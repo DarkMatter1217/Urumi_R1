@@ -1,0 +1,17 @@
+store:
+  id: demo
+
+ingress:
+  host: store-demo.localtest.me
+
+mysql:
+  image: mysql:8.0
+  rootPassword: rootpass
+  database: wordpress
+  user: wpuser
+  password: wppass
+  storage: 1Gi
+
+wordpress:
+  image: wordpress:6.4-apache
+  storage: 1Gi
