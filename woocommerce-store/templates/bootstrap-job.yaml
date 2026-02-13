@@ -13,36 +13,62 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: bootstrap
-          image: wordpress:cli
+          image: wordpress:cli-php8.2
           env:
             - name: WORDPRESS_DB_HOST
               value: mysql
             - name: WORDPRESS_DB_USER
-              value: wpuser
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: MYSQL_USER
             - name: WORDPRESS_DB_PASSWORD
-              value: wppass
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: MYSQL_PASSWORD
             - name: WORDPRESS_DB_NAME
-              value: wordpress
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: MYSQL_DATABASE
+            - name: WP_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: WP_ADMIN_USER
+            - name: WP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: WP_ADMIN_PASSWORD
+            - name: WP_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: WP_ADMIN_EMAIL
+
           command:
             - sh
             - -c
             - |
-              echo "Waiting 20 seconds for MySQL..."
+              echo "Waiting for MySQL..."
               sleep 20
 
-              echo "Installing WordPress if not installed..."
-              if ! wp core is-installed --path=/var/www/html --allow-root; then
-                wp core install \
-                  --url=http://{{ .Values.ingress.host }} \
-                  --title="Urumi Store" \
-                  --admin_user=admin \
-                  --admin_password=admin123 \
-                  --admin_email=admin@test.com \
-                  --path=/var/www/html \
-                  --allow-root
-              fi
+              echo "Downloading WordPress core..."
+              wp core download --path=/var/www/html --allow-root
 
-              echo "Forcing correct site URL..."
+              echo "Installing WordPress..."
+              wp core install \
+                --url=http://{{ .Values.ingress.host }} \
+                --title="Urumi Store" \
+                --admin_user=$WP_ADMIN_USER \
+                --admin_password=$WP_ADMIN_PASSWORD \
+                --admin_email=$WP_ADMIN_EMAIL \
+                --path=/var/www/html \
+                --allow-root
+
+              echo "Fixing site URL..."
               wp option update siteurl "http://{{ .Values.ingress.host }}" \
                 --allow-root \
                 --path=/var/www/html
@@ -51,13 +77,47 @@ spec:
                 --allow-root \
                 --path=/var/www/html
 
-              echo "Installing WooCommerce..."
-              wp plugin install woocommerce \
-                --activate \
-                --allow-root \
-                --path=/var/www/html
+              echo "Ensuring WooCommerce is installed and activated..."
 
+                WP_PATH="/var/www/html"
+
+                # Install if missing
+                if ! wp plugin is-installed woocommerce --path=$WP_PATH --allow-root; then
+                  wp plugin install woocommerce --path=$WP_PATH --allow-root
+                fi
+
+                # Activate if not active
+                if ! wp plugin is-active woocommerce --path=$WP_PATH --allow-root; then
+                  wp plugin activate woocommerce --path=$WP_PATH --allow-root
+                fi
+
+                echo "WooCommerce ready."
+
+              echo "Creating demo product..."
+              PRODUCT_ID=$(wp post create \
+                --post_type=product \
+                --post_title="Demo Product" \
+                --post_status=publish \
+                --path=/var/www/html \
+                --allow-root \
+                --porcelain)
+
+              wp post meta update $PRODUCT_ID _regular_price 499 \
+                --path=/var/www/html \
+                --allow-root
+
+              wp post meta update $PRODUCT_ID _price 499 \
+                --path=/var/www/html \
+                --allow-root
+
+              echo "Enabling Cash on Delivery..."
+              wp option update woocommerce_cod_settings \
+                '{"enabled":"yes","title":"Cash on Delivery","instructions":"Pay with cash upon delivery."}' \
+                --format=json \
+                --path=/var/www/html \
+                --allow-root
               echo "Bootstrap complete."
+
           volumeMounts:
             - name: wordpress-storage
               mountPath: /var/www/html

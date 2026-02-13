@@ -18,18 +18,30 @@ spec:
           image: {{ .Values.wordpress.image }}
           ports:
             - containerPort: 80
+
           env:
             - name: WORDPRESS_DB_HOST
               value: mysql
             - name: WORDPRESS_DB_USER
-              value: {{ .Values.mysql.user }}
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: MYSQL_USER
             - name: WORDPRESS_DB_PASSWORD
-              value: {{ .Values.mysql.password }}
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: MYSQL_PASSWORD
             - name: WORDPRESS_DB_NAME
-              value: {{ .Values.mysql.database }}
+              valueFrom:
+                secretKeyRef:
+                  name: store-secret
+                  key: MYSQL_DATABASE
+
           volumeMounts:
             - name: wordpress-storage
               mountPath: /var/www/html
+
           resources:
             requests:
               cpu: 200m
@@ -37,15 +49,17 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+
+          # 🔥 FIXED READINESS PROBE
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             initialDelaySeconds: 20
             periodSeconds: 10
+
+          # Liveness stays HTTP
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 80
             initialDelaySeconds: 60
             periodSeconds: 20

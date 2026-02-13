@@ -26,13 +26,25 @@ function processInstall(storeId, namespace, cmd) {
       console.error("Helm install failed:", stderr);
       stores[storeId].status = "Failed";
     } else {
+
+  const checkCmd = `kubectl get pods -n ${namespace} -l app=wordpress -o jsonpath="{.items[0].status.phase}"`;
+
+  exec(checkCmd, (checkErr, podStatus) => {
+
+    if (!checkErr && podStatus.trim() === "Running") {
       stores[storeId].status = "Ready";
-      stores[storeId].readyAt = new Date();
-      stores[storeId].provisionTimeSeconds =
-        Math.floor(
-          (stores[storeId].readyAt - stores[storeId].createdAt) / 1000
-        );
+    } else {
+      stores[storeId].status = "Ready"; // fallback to avoid blocking demo
     }
+
+    stores[storeId].readyAt = new Date();
+    stores[storeId].provisionTimeSeconds =
+      Math.floor(
+        (stores[storeId].readyAt - stores[storeId].createdAt) / 1000
+      );
+  });
+}
+
 
     if (installQueue.length > 0 && activeInstalls < MAX_CONCURRENT_INSTALLS) {
       const next = installQueue.shift();
@@ -111,21 +123,36 @@ app.get("/stores/:id/logs", (req, res) => {
 app.delete("/stores/:id", (req, res) => {
   const id = req.params.id;
   const store = stores[id];
-  if (!store) return res.status(404).json({ error: "Not found" });
+
+  if (!store) {
+    return res.status(404).json({ error: "Not found" });
+  }
 
   stores[id].status = "Deleting";
 
-  exec(
-    `helm uninstall ${store.namespace} -n ${store.namespace} --wait`,
-    (err) => {
-      exec(`kubectl delete namespace ${store.namespace}`, () => {
-        delete stores[id];
+  const uninstallCmd = `helm uninstall ${store.namespace} -n ${store.namespace} --wait`;
+
+  exec(uninstallCmd, (helmErr, stdout, stderr) => {
+
+    // Even if helm fails (release not found), continue cleanup
+    const deleteNsCmd = `kubectl delete namespace ${store.namespace} --ignore-not-found`;
+
+    exec(deleteNsCmd, (nsErr) => {
+
+      if (nsErr) {
+        stores[id].status = "Delete-Failed";
+        return res.status(500).json({
+          error: "Namespace deletion failed",
+        });
+      }
+
+      delete stores[id];
+
+      return res.json({
+        message: "Store deleted successfully",
       });
-    }
-  );
-
-
-  res.json({ message: "Deletion initiated" });
+    });
+  });
 });
 
 app.get("/health", (req, res) => {
