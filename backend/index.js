@@ -3,6 +3,7 @@ const cors = require("cors");
 const { exec } = require("child_process");
 const crypto = require("crypto");
 const path = require("path");
+const storeEvents = new Map();
 
 const app = express();
 app.use(cors());
@@ -14,10 +15,23 @@ const MAX_CONCURRENT_INSTALLS = 2;
 const installQueue = [];
 
 
+function logEvent(storeId, message) {
+  const entry = {
+    time: new Date().toISOString(),
+    message,
+  };
+
+  if (!storeEvents.has(storeId)) {
+    storeEvents.set(storeId, []);
+  }
+
+  storeEvents.get(storeId).push(entry);
+}
 
 
 function processInstall(storeId, namespace, cmd) {
-  activeInstalls++;
+  activeInstalls++;logEvent(storeId, "Helm install started");
+
 
   exec(cmd, (error, stdout, stderr) => {
     activeInstalls--;
@@ -25,6 +39,8 @@ function processInstall(storeId, namespace, cmd) {
     if (error) {
       console.error("Helm install failed:", stderr);
       stores[storeId].status = "Failed";
+      logEvent(storeId, "Helm install failed");
+      logEvent(storeId, stderr || error.message);
     } else {
 
   const checkCmd = `kubectl get pods -n ${namespace} -l app=wordpress -o jsonpath="{.items[0].status.phase}"`;
@@ -33,8 +49,12 @@ function processInstall(storeId, namespace, cmd) {
 
     if (!checkErr && podStatus.trim() === "Running") {
       stores[storeId].status = "Ready";
+      logEvent(storeId, "WordPress pod running");
+      logEvent(storeId, "Store marked Ready");
+
     } else {
       stores[storeId].status = "Ready"; // fallback to avoid blocking demo
+      logEvent(storeId, "Store marked Ready (fallback)");
     }
 
     stores[storeId].readyAt = new Date();
@@ -66,6 +86,10 @@ app.post("/stores", (req, res) => {
     status: "Provisioning",
     createdAt: new Date()
   };
+  logEvent(storeId, "Store provisioning started");
+  logEvent(storeId, "Namespace planned: " + namespace);
+  logEvent(storeId, "Helm install queued");
+
 
   const chartPath = path.resolve(__dirname, "../woocommerce-store");
 
@@ -89,6 +113,15 @@ app.get("/stores/:id", (req, res) => {
   const store = stores[req.params.id];
   if (!store) return res.status(404).json({ error: "Not found" });
   res.json(store);
+});
+app.get("/stores/:id/events", (req, res) => {
+  const { id } = req.params;
+
+  if (!stores[id]) {
+    return res.status(404).json({ error: "Store not found" });
+  }
+
+  res.json(storeEvents.get(id) || []);
 });
 
 app.get("/stores/:id/logs", (req, res) => {
@@ -129,6 +162,7 @@ app.delete("/stores/:id", (req, res) => {
   }
 
   stores[id].status = "Deleting";
+  logEvent(id, "Store deletion started");
 
   const uninstallCmd = `helm uninstall ${store.namespace} -n ${store.namespace} --wait`;
 
@@ -145,6 +179,8 @@ app.delete("/stores/:id", (req, res) => {
           error: "Namespace deletion failed",
         });
       }
+      logEvent(id, "Namespace deleted");
+      logEvent(id, "Store deleted successfully");
 
       delete stores[id];
 

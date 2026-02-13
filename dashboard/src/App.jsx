@@ -5,6 +5,8 @@ const API = "http://localhost:4000";
 function App() {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedStore, setSelectedStore] = useState(null);
+  const [events, setEvents] = useState([]);
 
   const fetchStores = async () => {
     try {
@@ -35,6 +37,17 @@ function App() {
       console.error("Failed to delete store", err);
     }
   };
+  const fetchEvents = async (id) => {
+    try {
+      const res = await fetch(`${API}/stores/${id}/events`);
+      const data = await res.json();
+      setEvents(data);
+      setSelectedStore(id);
+    } catch (err) {
+      console.error("Failed to fetch events", err);
+    }
+  };
+
 
   useEffect(() => {
     fetchStores();
@@ -76,14 +89,33 @@ function App() {
               </td>
               <td>{store.createdAt}</td>
               <td>
+                <button onClick={() => fetchEvents(store.id)}>
+                  View Events
+                </button>{" "}
                 <button onClick={() => deleteStore(store.id)}>
                   Delete
                 </button>
               </td>
+
             </tr>
           ))}
         </tbody>
       </table>
+      {selectedStore && (
+  <div style={{ marginTop: 30, padding: 15, background: "#111", color: "#0f0" }}>
+    <h3>Events for {selectedStore}</h3>
+    {events.length === 0 ? (
+      <p>No events recorded.</p>
+    ) : (
+      events.map((e, i) => (
+        <div key={i}>
+          [{e.time}] {e.message}
+        </div>
+      ))
+    )}
+  </div>
+)}
+
     </div>
   );
 }
