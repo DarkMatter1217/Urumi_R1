@@ -321,8 +321,7 @@ The demo includes:
 
 ---
 
-# 👨‍💻 Author
+# Author
 
 Prabhjot Singh
-Urumi AI SDE Internship – Round 1 Submission
 
