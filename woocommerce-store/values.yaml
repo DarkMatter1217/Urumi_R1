@@ -1,5 +1,8 @@
 store:
-  id: demo
+  title: "My Store"
+  adminUser: "admin"
+  adminPassword: "admin123"
+  adminEmail: "admin@test.com"
 
 ingress:
   host: store-demo.localtest.me

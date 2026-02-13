@@ -19,15 +19,10 @@ spec:
         image: {{ .Values.mysql.image }}
         ports:
         - containerPort: 3306
-        env:
-        - name: MYSQL_ROOT_PASSWORD
-          value: {{ .Values.mysql.rootPassword }}
-        - name: MYSQL_DATABASE
-          value: {{ .Values.mysql.database }}
-        - name: MYSQL_USER
-          value: {{ .Values.mysql.user }}
-        - name: MYSQL_PASSWORD
-          value: {{ .Values.mysql.password }}
+        envFrom:
+        - secretRef:
+            name: mysql-secret
+
         volumeMounts:
         - name: mysql-storage
           mountPath: /var/lib/mysql

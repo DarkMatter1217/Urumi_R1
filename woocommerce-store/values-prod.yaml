@@ -1,0 +1,12 @@
+ingress:
+  host: store.example.com
+
+mysql:
+  storage: 5Gi
+
+wordpress:
+  storage: 5Gi
+
+store:
+  adminPassword: "CHANGE_ME_IN_PROD"
+  

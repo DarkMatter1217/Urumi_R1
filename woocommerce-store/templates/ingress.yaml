@@ -4,7 +4,7 @@ metadata:
   name: wordpress
   namespace: {{ .Release.Namespace }}
 spec:
-  ingressClassName: nginx
+  ingressClassName: {{ .Values.ingress.className | default "traefik" }}
   rules:
   - host: {{ .Values.ingress.host }}
     http:

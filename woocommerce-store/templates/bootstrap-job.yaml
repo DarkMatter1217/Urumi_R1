@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wordpress-bootstrap
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: wordpress:cli
+          env:
+            - name: WORDPRESS_DB_HOST
+              value: mysql
+            - name: WORDPRESS_DB_USER
+              value: wpuser
+            - name: WORDPRESS_DB_PASSWORD
+              value: wppass
+            - name: WORDPRESS_DB_NAME
+              value: wordpress
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting 20 seconds for MySQL..."
+              sleep 20
+
+              echo "Installing WordPress if not installed..."
+              if ! wp core is-installed --path=/var/www/html --allow-root; then
+                wp core install \
+                  --url=http://{{ .Values.ingress.host }} \
+                  --title="Urumi Store" \
+                  --admin_user=admin \
+                  --admin_password=admin123 \
+                  --admin_email=admin@test.com \
+                  --path=/var/www/html \
+                  --allow-root
+              fi
+
+              echo "Forcing correct site URL..."
+              wp option update siteurl "http://{{ .Values.ingress.host }}" \
+                --allow-root \
+                --path=/var/www/html
+
+              wp option update home "http://{{ .Values.ingress.host }}" \
+                --allow-root \
+                --path=/var/www/html
+
+              echo "Installing WooCommerce..."
+              wp plugin install woocommerce \
+                --activate \
+                --allow-root \
+                --path=/var/www/html
+
+              echo "Bootstrap complete."
+          volumeMounts:
+            - name: wordpress-storage
+              mountPath: /var/www/html
+      volumes:
+        - name: wordpress-storage
+          persistentVolumeClaim:
+            claimName: wordpress-pvc
