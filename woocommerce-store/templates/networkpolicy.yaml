@@ -28,3 +28,10 @@ spec:
     # Allow same-namespace communication (WordPress <-> MySQL)
     - to:
         - podSelector: {}
+    # Allow outbound HTTPS (for WooCommerce download)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443

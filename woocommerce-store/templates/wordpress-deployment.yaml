@@ -13,12 +13,18 @@ spec:
       labels:
         app: wordpress
     spec:
+      securityContext:
+        fsGroup: 33
+
       containers:
         - name: wordpress
-          image: {{ .Values.wordpress.image }}
+          image: wordpress:latest
+          securityContext:
+            runAsUser: 33
+            runAsGroup: 33
           ports:
             - containerPort: 80
-
+          
           env:
             - name: WORDPRESS_DB_HOST
               value: mysql

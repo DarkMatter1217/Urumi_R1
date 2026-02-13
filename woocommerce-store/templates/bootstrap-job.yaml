@@ -10,10 +10,17 @@ spec:
   backoffLimit: 1
   template:
     spec:
+      securityContext:
+        fsGroup: 33
+
       restartPolicy: OnFailure
       containers:
         - name: bootstrap
           image: wordpress:cli-php8.2
+          securityContext:
+            runAsUser: 33
+            runAsGroup: 33
+
           env:
             - name: WORDPRESS_DB_HOST
               value: mysql
@@ -77,21 +84,37 @@ spec:
                 --allow-root \
                 --path=/var/www/html
 
-              echo "Ensuring WooCommerce is installed and activated..."
+              echo "Installing WooCommerce..."
 
-                WP_PATH="/var/www/html"
+              if ! wp plugin is-installed woocommerce --path=/var/www/html --allow-root; then
+                wp plugin install https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip \
+                  --path=/var/www/html \
+                  --allow-root
+              fi
 
-                # Install if missing
-                if ! wp plugin is-installed woocommerce --path=$WP_PATH --allow-root; then
-                  wp plugin install woocommerce --path=$WP_PATH --allow-root
-                fi
+              wp plugin activate woocommerce --path=/var/www/html --allow-root
 
-                # Activate if not active
-                if ! wp plugin is-active woocommerce --path=$WP_PATH --allow-root; then
-                  wp plugin activate woocommerce --path=$WP_PATH --allow-root
-                fi
+              # Create WooCommerce default pages
+              wp wc tool run install_pages --user=1 --path=/var/www/html --allow-root
 
-                echo "WooCommerce ready."
+              wp plugin activate woocommerce --path=/var/www/html --allow-root
+
+              wp wc tool run install_pages --user=1 --path=/var/www/html --allow-root
+              SHOP_ID=$(wp post list --post_type=page --title="Shop" --field=ID --path=/var/www/html --allow-root)
+
+              # Set homepage to Shop
+              wp option update show_on_front page --path=/var/www/html --allow-root
+              wp option update page_on_front $SHOP_ID --path=/var/www/html --allow-root
+
+              wp option update woocommerce_task_list_hidden yes --path=/var/www/html --allow-root || true
+              wp option update woocommerce_onboarding_profile '{"completed":true}' --format=json --path=/var/www/html --allow-root || true
+              wp option update woocommerce_admin_features '[]' --format=json --path=/var/www/html --allow-root || true
+
+              wp option update woocommerce_store_setup_coming_soon no --path=/var/www/html --allow-root || true
+              wp option update woocommerce_coming_soon_enabled no --path=/var/www/html --allow-root || true
+              wp option update woocommerce_coming_soon no --path=/var/www/html --allow-root || true
+
+              echo "WooCommerce ready."
 
               echo "Creating demo product..."
               PRODUCT_ID=$(wp post create \
