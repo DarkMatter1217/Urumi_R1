@@ -9,10 +9,10 @@ ingress:
 
 mysql:
   image: mysql:8.0
-  rootPassword: rootpass
+  rootPassword: "changeme"
   database: wordpress
   user: wpuser
-  password: wppass
+  password: "changeme"
   storage: 1Gi
 
 wordpress:
