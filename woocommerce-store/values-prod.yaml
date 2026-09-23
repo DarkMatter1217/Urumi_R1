@@ -8,5 +8,5 @@ wordpress:
   storage: 5Gi
 
 store:
-  adminPassword: "CHANGE_ME_IN_PROD"
+  adminPassword: ""
   
